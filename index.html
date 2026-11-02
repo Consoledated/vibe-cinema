@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeCinema — Умный подбор фильмов из Топ-200 IMDb</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        serif: ['Fraunces', 'Georgia', 'serif'],
+                        sans: ['"Source Sans 3"', 'Segoe UI', 'sans-serif'],
+                    },
+                    colors: {
+                        paper: '#f3ece1',
+                        cream: '#faf6ef',
+                        dust: '#e4d8c6',
+                        ink: '#322c26',
+                        mute: '#6a6158',
+                        brick: '#9a5c4c',
+                        sage: '#6d7a68',
+                        ochre: '#b08a58',
+                        line: '#d4c6b2'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f3ece1;
+            color: #322c26;
+            font-family: 'Source Sans 3', sans-serif;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: "";
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            opacity: 0.07;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+        h1, h2, h3, h4, .font-serif {
+            font-family: Fraunces, Georgia, serif;
+            letter-spacing: -0.02em;
+        }
+        .card-hover {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 24px -16px rgba(50, 44, 38, 0.35);
+        }
+        @keyframes pulse-fast {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(0.98); opacity: 0.88; }
+        }
+        .roulette-spinning {
+            animation: pulse-fast 0.18s infinite;
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #e4d8c6; }
+        ::-webkit-scrollbar-thumb { background: #c4b39a; }
+        ::-webkit-scrollbar-thumb:hover { background: #9a5c4c; }
+        ::selection { background: #dcc7b0; color: #322c26; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="sticky top-0 z-40 bg-paper border-b border-line">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="resetToHome()">
+                <div class="w-10 h-10 sm:w-11 sm:h-11 border border-ink/20 bg-cream flex items-center justify-center">
+                    <i class="fa-solid fa-film text-brick text-lg"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-serif font-semibold text-lg sm:text-xl text-ink">КиноПодбор</span>
+                        <span class="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-[0.16em] px-2 py-0.5 border border-line text-mute">IMDb Top 200</span>
+                    </div>
+                    <p class="text-xs text-mute hidden sm:block">Подбор фильма на вечер по настроению и рейтингу</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button onclick="openRandomModal()" class="hidden md:flex items-center gap-2 px-3.5 py-2 bg-cream hover:bg-dust text-ink text-sm font-medium transition border border-line">
+                    <i class="fa-solid fa-dice text-mute"></i>
+                    <span>Рандом</span>
+                </button>
+                <button onclick="openQuizModal()" class="hidden md:flex items-center gap-2 px-3.5 py-2 bg-cream hover:bg-dust text-ink text-sm font-medium transition border border-line">
+                    <i class="fa-solid fa-list-ol text-mute"></i>
+                    <span>Пройти тест</span>
+                </button>
+                <button onclick="toggleWatchlistDrawer()" class="relative flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-brick/10 hover:bg-brick/15 text-brick border border-brick/25 text-sm font-semibold transition">
+                    <i class="fa-solid fa-bookmark"></i>
+                    <span class="hidden sm:inline">Буду смотреть</span>
+                    <span id="watchlistCountBadge" class="px-1.5 py-0.5 text-xs bg-brick text-cream font-semibold">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <main class="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+        <!-- ГЛАВНЫЙ ПУЛЬТ УПРАВЛЕНИЯ И ФИЛЬТРОВ (HERO) -->
+        <section class="bg-cream border border-line p-5 sm:p-8 mb-8">
+            <div class="max-w-3xl mb-6">
+                <div class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-mute mb-3">
+                    <span class="w-6 h-px bg-line"></span>
+                    Отобрано из лучших фильмов IMDb каждого жанра
+                </div>
+                <h1 class="text-2xl sm:text-[2.4rem] font-semibold text-ink leading-tight">
+                    Что посмотрим сегодня вечером?
+                </h1>
+                <p class="text-mute text-sm sm:text-base mt-2 leading-relaxed">
+                    Настройте фильтры под настроение, доверьтесь рулетке или ответьте на четыре коротких вопроса.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2 border-t border-line">
+                <div class="lg:col-span-7">
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.14em] text-mute mb-3">
+                        1. Жанр
+                    </label>
+                    <div id="genreFilterContainer" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div class="lg:col-span-5">
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.14em] text-mute mb-3">
+                        2. Глубина рейтинга IMDb в жанре
+                    </label>
+                    <div class="grid grid-cols-3 gap-1 p-1 border border-line bg-paper" id="imdbTierContainer">
+                        <button type="button" onclick="setImdbTier(50)" data-tier="50" class="tier-btn py-2.5 px-3 text-xs sm:text-sm font-semibold transition flex flex-col items-center justify-center gap-0.5">
+                            <span>Топ-50</span>
+                            <span class="text-[10px] font-normal opacity-75">Легенды</span>
+                        </button>
+                        <button type="button" onclick="setImdbTier(100)" data-tier="100" class="tier-btn py-2.5 px-3 text-xs sm:text-sm font-semibold transition flex flex-col items-center justify-center gap-0.5">
+                            <span>Топ-100</span>
+                            <span class="text-[10px] font-normal opacity-75">Золотой фонд</span>
+                        </button>
+                        <button type="button" onclick="setImdbTier(200)" data-tier="200" class="tier-btn py-2.5 px-3 text-xs sm:text-sm font-semibold transition flex flex-col items-center justify-center gap-0.5">
+                            <span>Топ-200</span>
+                            <span class="text-[10px] font-normal opacity-75">Все хиты</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-8">
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.14em] text-mute mb-3">
+                        3. Настроение и атмосфера
+                    </label>
+                    <div id="moodFilterContainer" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div class="lg:col-span-4">
+                    <label for="sortSelect" class="block text-[11px] font-semibold uppercase tracking-[0.14em] text-mute mb-3">
+                        Сортировка списка
+                    </label>
+                    <select id="sortSelect" onchange="applyFilters(false)" class="w-full bg-paper border border-line px-3.5 py-2.5 text-sm text-ink focus:outline-none focus:border-brick">
+                        <option value="rank_asc">По месту в Топе жанра (1 → 200)</option>
+                        <option value="rating_desc">По рейтингу IMDb (сначала высокий)</option>
+                        <option value="year_desc">Сначала новые фильмы</option>
+                        <option value="year_asc">Сначала классика</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mt-7 pt-6 border-t border-line grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button onclick="applyFilters(true)" class="w-full py-3.5 px-5 bg-ink hover:bg-brick text-cream font-semibold text-sm sm:text-base flex items-center justify-center gap-2.5 transition">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Подобрать по фильтрам</span>
+                    <span id="matchingCountPill" class="ml-1 px-2 py-0.5 text-xs bg-cream/15 text-cream">0</span>
+                </button>
+
+                <button onclick="openRandomModal()" class="w-full py-3.5 px-5 bg-cream hover:bg-dust text-ink border border-line font-semibold text-sm sm:text-base flex items-center justify-center gap-2.5 transition">
+                    <i class="fa-solid fa-dice-five"></i>
+                    <span>Рандомное кино</span>
+                </button>
+
+                <button onclick="openQuizModal()" class="w-full py-3.5 px-5 bg-cream hover:bg-dust text-ink border border-line font-semibold text-sm sm:text-base flex items-center justify-center gap-2.5 transition">
+                    <i class="fa-solid fa-clipboard-question"></i>
+                    <span>Пройти тест (4 вопроса)</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- ИНФОРМАЦИОННАЯ ПАНЕЛЬ РЕЗУЛЬТАТОВ -->
+        <section id="resultsSection">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-semibold text-ink flex items-center gap-2.5">
+                        <span id="resultsTitle">Подборка фильмов</span>
+                        <span id="activeTierBadge" class="text-[10px] font-semibold uppercase tracking-[0.12em] px-2 py-1 border border-line text-mute">Топ-200 IMDb</span>
+                    </h2>
+                    <p id="resultsSubtitle" class="text-xs sm:text-sm text-mute mt-0.5">Показаны лучшие фильмы выбранного жанра</p>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="relative flex-1 sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-mute text-xs"></i>
+                        <input id="searchInput" oninput="applyFilters(false)" type="text" placeholder="Поиск по названию или режиссёру..." class="w-full pl-9 pr-3 py-2 bg-cream border border-line text-xs sm:text-sm text-ink placeholder-mute focus:outline-none focus:border-brick">
+                    </div>
+                    <button onclick="resetAllFilters()" class="px-3 py-2 bg-cream hover:bg-dust text-mute text-xs font-medium transition shrink-0 border border-line" title="Сбросить все фильтры">
+                        <i class="fa-solid fa-rotate-left mr-1"></i> Сброс
+                    </button>
+                </div>
+            </div>
+
+            <!-- СЕТКА КАРТОЧЕК ФИЛЬМОВ -->
+            <div id="moviesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <!-- Генерируется через JS -->
+            </div>
+
+            <!-- Пустое состояние, если фильтр ничего не нашёл -->
+            <div id="emptyState" class="hidden text-center py-16 px-4 bg-cream border border-line my-4">
+                <div class="w-14 h-14 border border-line bg-paper flex items-center justify-center mx-auto mb-4 text-mute text-xl">
+                    <i class="fa-solid fa-film"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-ink mb-1">По таким фильтрам фильмов не нашлось</h3>
+                <p class="text-sm text-mute max-w-md mx-auto mb-5">
+                    Попробуйте переключить глубину рейтинга на «Топ-200 IMDb» или выбрать «Любое настроение».
+                </p>
+                <button onclick="resetAllFilters()" class="px-5 py-2.5 bg-ink hover:bg-brick text-cream font-semibold text-sm transition">
+                    Показать все фильмы
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- МОДАЛЬНОЕ ОКНО 1: РАНДОМНОЕ КИНО (РУЛЕТКА) -->
+    <div id="randomModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-ink/40">
+        <div class="bg-cream border border-line max-w-xl w-full p-6 sm:p-8 relative overflow-hidden shadow-lg">
+            <button onclick="closeRandomModal()" class="absolute top-4 right-4 w-9 h-9 border border-line bg-paper hover:bg-dust text-mute flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <div class="flex items-center gap-2.5 mb-2">
+                <span class="w-8 h-8 border border-line text-mute flex items-center justify-center">
+                    <i class="fa-solid fa-dice"></i>
+                </span>
+                <h3 class="text-xl font-semibold text-ink">Кино-рулетка</h3>
+            </div>
+            <p class="text-xs sm:text-sm text-mute mb-4">
+                Доверьтесь случаю: рулетка выберет один фильм на вечер.
+            </p>
+
+            <label class="flex items-center gap-2.5 p-3 bg-paper border border-line cursor-pointer mb-5 select-none">
+                <input type="checkbox" id="useFiltersInRandom" checked class="w-4 h-4 accent-brick">
+                <span class="text-xs sm:text-sm text-ink">
+                    Учитывать выбранные фильтры (<span id="randomFilterSummary" class="text-brick font-semibold">Все жанры, Топ-200</span>)
+                </span>
+            </label>
+
+            <!-- Контейнер для карточки-результата рулетки -->
+            <div id="randomCardContainer" class="min-h-[280px] flex flex-col justify-center">
+                <!-- Динамически заполняется JS -->
+            </div>
+
+            <!-- Кнопки управления рулеткой -->
+            <div class="mt-6 flex flex-col sm:flex-row gap-3">
+                <button onclick="spinRandomMovie()" class="flex-1 py-3.5 px-5 bg-ink hover:bg-brick text-cream font-semibold text-sm flex items-center justify-center gap-2 transition">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span>Крутить ещё раз</span>
+                </button>
+                <button onclick="closeRandomModal()" class="py-3.5 px-5 bg-paper hover:bg-dust text-mute font-semibold text-sm border border-line transition">
+                    Закрыть
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО 2: ПОШАГОВЫЙ КИНО-ТЕСТ -->
+    <div id="quizModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-ink/40">
+        <div class="bg-cream border border-line max-w-2xl w-full p-6 sm:p-8 relative overflow-hidden shadow-lg">
+            <button onclick="closeQuizModal()" class="absolute top-4 right-4 w-9 h-9 border border-line bg-paper hover:bg-dust text-mute flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <div class="flex items-center gap-2.5 mb-3">
+                <span class="w-8 h-8 border border-line text-mute flex items-center justify-center">
+                    <i class="fa-solid fa-list-ol"></i>
+                </span>
+                <h3 class="text-xl font-semibold text-ink">Тест: фильм на вечер</h3>
+            </div>
+
+            <div id="quizProgressWrapper" class="mb-6">
+                <div class="flex justify-between text-xs text-mute mb-1.5">
+                    <span id="quizStepText">Вопрос 1 из 4</span>
+                    <span id="quizPercentText">25%</span>
+                </div>
+                <div class="w-full h-1.5 bg-dust overflow-hidden">
+                    <div id="quizProgressBar" class="h-full bg-brick transition-all duration-300" style="width: 25%"></div>
+                </div>
+            </div>
+
+            <!-- Тело вопроса или результат -->
+            <div id="quizBodyContainer">
+                <!-- Заполняется через JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- БОКОВАЯ ПАНЕЛЬ: СПИСОК "БУДУ СМОТРЕТЬ" -->
+    <div id="watchlistDrawer" class="fixed inset-0 z-50 hidden">
+        <div onclick="toggleWatchlistDrawer()" class="absolute inset-0 bg-ink/35"></div>
+        <div class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-cream border-l border-line p-6 flex flex-col">
+            <div class="flex items-center justify-between pb-4 border-b border-line">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-bookmark text-brick text-lg"></i>
+                    <h3 class="text-lg font-semibold text-ink">Список «Буду смотреть»</h3>
+                </div>
+                <button onclick="toggleWatchlistDrawer()" class="w-8 h-8 border border-line bg-paper hover:bg-dust text-mute flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="watchlistItemsContainer" class="flex-1 overflow-y-auto py-4 space-y-3">
+                <!-- Заполняется через JS -->
+            </div>
+
+            <div class="pt-4 border-t border-line flex items-center justify-between">
+                <button onclick="clearWatchlist()" class="text-xs text-brick hover:text-ink font-medium">
+                    <i class="fa-solid fa-trash-can mr-1"></i> Очистить список
+                </button>
+                <button onclick="toggleWatchlistDrawer()" class="px-4 py-2 bg-ink hover:bg-brick text-cream text-xs font-semibold">
+                    Продолжить выбор
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ (TOAST ВМЕСТО ALERT) -->
+    <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 pointer-events-none transition-all duration-300 bg-cream border border-line text-ink px-4 py-3 shadow-md flex items-center gap-3">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-sage"></i>
+        <span id="toastMessage" class="text-sm font-medium">Фильм добавлен в список</span>
+    </div>
+
+    <footer class="relative z-10 border-t border-line bg-paper py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-mute">
+            <p>КиноПодбор (VibeCinema) — учебный проект. Рейтинги основаны на IMDb Top-200 жанров.</p>
+            <p>Данные для обучения, не коммерческий каталог.</p>
+        </div>
+    </footer>
+
+    <!-- ЛОГИКА ПРИЛОЖЕНИЯ И БАЗА ФИЛЬМОВ -->
+    <script>
+        /**
+         * БАЗА ДАННЫХ ФИЛЬМОВ (30 культовых фильмов разных жанров с реальными местами внутри Топ-50, Топ-100 и Топ-200 IMDb своего жанра)
+         * genreRank показывает место фильма в рейтинге своего жанра:
+         * 1..50 -> попадает в Топ-50, Топ-100 и Топ-200
+         * 51..100 -> попадает в Топ-100 и Топ-200
+         * 101..200 -> попадает в Топ-200
+         */
+        const MOVIES_DB = [
+            // === ФАНТАСТИКА ===
+            {
+                id: 1,
+                title: "Интерстеллар",
+                originalTitle: "Interstellar",
+                year: 2014,
+                genre: "Фантастика",
+                imdbRating: 8.7,
+                genreRank: 3, // Топ-50 жанра
+                mood: "Подумать",
+                pace: "balanced",
+                company: "any",
+                atmosphere: "future",
+                duration: "169 мин",
+                director: "Кристофер Нолан",
+                icon: "fa-user-astronaut",
+                gradient: "bg-[#c9d4d8]",
+                description: "Когда засуха и пыльные бури приводят человечество к продовольственному кризису, коллектив исследователей отправляется сквозь червоточину в космосе, чтобы найти новый дом для людей.",
+                whyWatch: "Масштабная научная фантастика с гениальной музыкой Ханса Циммера и мощной эмоциональной историей отца и дочери."
+            },
+            {
+                id: 2,
+                title: "Начало",
+                originalTitle: "Inception",
+                year: 2010,
+                genre: "Фантастика",
+                imdbRating: 8.8,
+                genreRank: 1, // Топ-50 жанра
+                mood: "Держит в напряжении",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "mystery",
+                duration: "148 мин",
+                director: "Кристофер Нолан",
+                icon: "fa-cubes-stacked",
+                gradient: "bg-[#d5cfc4]",
+                description: "Кобб — талантливый вор, лучший в опасном искусстве извлечения секретов из глубин подсознания во время сна. Но теперь ему предстоит обратная задача — внедрить идею в чужой разум.",
+                whyWatch: "Безупречный интеллектуальный блокбастер, который заставляет следить за каждой секундой."
+            },
+            {
+                id: 3,
+                title: "Бегущий по лезвию 2049",
+                originalTitle: "Blade Runner 2049",
+                year: 2017,
+                genre: "Фантастика",
+                imdbRating: 8.0,
+                genreRank: 64, // Топ-100 жанра
+                mood: "Подумать",
+                pace: "slow",
+                company: "solo",
+                atmosphere: "future",
+                duration: "164 мин",
+                director: "Дени Вильнёв",
+                icon: "fa-microchip",
+                gradient: "bg-[#e4cfc0]",
+                description: "Офицер полиции Кей раскрывает давнюю тайну, способную погрузить остатки общества в хаос. Его открытие заставляет его отправиться на поиски Рика Декарда, пропавшего 30 лет назад.",
+                whyWatch: "Невероятный неоновый визуал, за который оператор Роджер Дикинс получил «Оскар», и глубокая философская атмосфера."
+            },
+            {
+                id: 4,
+                title: "Прибытие",
+                originalTitle: "Arrival",
+                year: 2016,
+                genre: "Фантастика",
+                imdbRating: 7.9,
+                genreRank: 82, // Топ-100 жанра
+                mood: "Подумать",
+                pace: "slow",
+                company: "couple",
+                atmosphere: "future",
+                duration: "116 мин",
+                director: "Дени Вильнёв",
+                icon: "fa-globe",
+                gradient: "bg-[#d3d8cf]",
+                description: "Неожиданное появление неопознанных летающих объектов в разных точках планеты повергает мир в трепет. Лингвист Луиза Бэнкс должна расшифровать язык пришельцев, пока не началась война.",
+                whyWatch: "Тонкая, умная и трогательная фантастика о языке, времени и принятии судьбы."
+            },
+            {
+                id: 5,
+                title: "Грань будущего",
+                originalTitle: "Edge of Tomorrow",
+                year: 2014,
+                genre: "Фантастика",
+                imdbRating: 7.9,
+                genreRank: 118, // Топ-200 жанра
+                mood: "Держит в напряжении",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "future",
+                duration: "113 мин",
+                director: "Даг Лайман",
+                icon: "fa-bolt",
+                gradient: "bg-[#cfd6d8]",
+                description: "Майор Уильям Кейдж попадает во временную петлю во время битвы с инопланетными захватчиками. Умирая снова и снова, он с каждым разом становится всё более опасным бойцом.",
+                whyWatch: "Стремительный, остроумный и изобретательный фантастический экшен без единой скучной минуты."
+            },
+
+            // === ДРАМА ===
+            {
+                id: 6,
+                title: "Побег из Шоушенка",
+                originalTitle: "The Shawshank Redemption",
+                year: 1994,
+                genre: "Драма",
+                imdbRating: 9.3,
+                genreRank: 1, // Топ-50 жанра
+                mood: "Вдохновиться",
+                pace: "balanced",
+                company: "any",
+                atmosphere: "real",
+                duration: "142 мин",
+                director: "Фрэнк Дарабонт",
+                icon: "fa-dove",
+                gradient: "bg-[#e4d6c0]",
+                description: "Бухгалтер Энди Дюфрейн обвинён в убийстве собственной жены и её любовника. Оказавшись в мрачной тюрьме Шоушенк, он не теряет надежду и силу духа даже спустя десятилетия.",
+                whyWatch: "Абсолютный лидер рейтинга IMDb за всю историю кино — гимн человеческому достоинству, дружбе и надежде."
+            },
+            {
+                id: 7,
+                title: "Одержимость",
+                originalTitle: "Whiplash",
+                year: 2014,
+                genre: "Драма",
+                imdbRating: 8.5,
+                genreRank: 19, // Топ-50 жанра
+                mood: "Держит в напряжении",
+                pace: "dynamic",
+                company: "solo",
+                atmosphere: "real",
+                duration: "106 мин",
+                director: "Дэмьен Шазелл",
+                icon: "fa-drum",
+                gradient: "bg-[#e3d4b4]",
+                description: "Первокурсник консерватории Эндрю мечтает стать великим джазовым барабанщиком. Его замечает гениальный, но безжалостный дирижёр Теренс Флетчер, превращающий репетиции в психологическую дуэль.",
+                whyWatch: "Музыкальная драма с накалом страстей сильнее любого боевика."
+            },
+            {
+                id: 8,
+                title: "Игры разума",
+                originalTitle: "A Beautiful Mind",
+                year: 2001,
+                genre: "Драма",
+                imdbRating: 8.2,
+                genreRank: 68, // Топ-100 жанра
+                mood: "Подумать",
+                pace: "balanced",
+                company: "couple",
+                atmosphere: "real",
+                duration: "135 мин",
+                director: "Рон Ховард",
+                icon: "fa-brain",
+                gradient: "bg-[#d7d5c4]",
+                description: "Биографическая история гениального математика Джона Нэша, лауреата Нобелевской премии, которому пришлось вести многолетнюю борьбу с тяжёлым недугом собственного разума.",
+                whyWatch: "Потрясающий сюжетный поворот и выдающаяся актёрская игра Рассела Кроу."
+            },
+            {
+                id: 9,
+                title: "Невероятная жизнь Уолтера Митти",
+                originalTitle: "The Secret Life of Walter Mitty",
+                year: 2013,
+                genre: "Драма",
+                imdbRating: 7.3,
+                genreRank: 145, // Топ-200 жанра
+                mood: "Вдохновиться",
+                pace: "balanced",
+                company: "any",
+                atmosphere: "cozy",
+                duration: "114 мин",
+                director: "Бен Стиллер",
+                icon: "fa-mountain-sun",
+                gradient: "bg-[#d4dce0]",
+                description: "Скромный сотрудник фотоотдела журнала Life привык мечтать о приключениях только в воображении. Но пропажа важного негатива заставляет его отправиться в реальное путешествие в Гренландию, Исландию и Гималаи.",
+                whyWatch: "Лучшее лекарство от усталости и рутины с невероятными пейзажами и вдохновляющим саундтреком."
+            },
+
+            // === КОМЕДИЯ ===
+            {
+                id: 10,
+                title: "1+1 (Неприкасаемые)",
+                originalTitle: "Intouchables",
+                year: 2011,
+                genre: "Комедия",
+                imdbRating: 8.5,
+                genreRank: 4, // Топ-50 жанра
+                mood: "Вдохновиться",
+                pace: "balanced",
+                company: "any",
+                atmosphere: "cozy",
+                duration: "112 мин",
+                director: "Оливье Накаш, Эрик Толедано",
+                icon: "fa-face-laugh-beam",
+                gradient: "bg-[#ddd6d4]",
+                description: "Пострадав в результате несчастного случая, богатый аристократ Филипп нанимает в помощники Дрисса — парня из пригорода, который совсем не умеет жалеть, но возвращает ему вкус к жизни.",
+                whyWatch: "Тёплый, искренний и невероятно смешной французский шедевр, который нравится абсолютно всем."
+            },
+            {
+                id: 11,
+                title: "Отель «Гранд Будапешт»",
+                originalTitle: "The Grand Budapest Hotel",
+                year: 2014,
+                genre: "Комедия",
+                imdbRating: 8.1,
+                genreRank: 28, // Топ-50 жанра
+                mood: "Расслабиться",
+                pace: "dynamic",
+                company: "couple",
+                atmosphere: "cozy",
+                duration: "99 мин",
+                director: "Уэс Андерсон",
+                icon: "fa-bell-concierge",
+                gradient: "bg-[#e8d4cd]",
+                description: "Авантюрные приключения легендарного консьержа месье Густава и его юного помощника Зеро Мустафы в вымышленной восточноевропейской стране Зубровке между двумя войнами.",
+                whyWatch: "Идеальная симметрия кадра, фирменный ироничный юмор и сказочная эстетика Уэса Андерсона."
+            },
+            {
+                id: 12,
+                title: "Достать ножи",
+                originalTitle: "Knives Out",
+                year: 2019,
+                genre: "Комедия",
+                imdbRating: 7.9,
+                genreRank: 62, // Топ-100 жанра
+                mood: "Расслабиться",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "mystery",
+                duration: "130 мин",
+                director: "Райан Джонсон",
+                icon: "fa-magnifying-glass",
+                gradient: "bg-[#e6dcc8]",
+                description: "На следующее утро после празднования 85-летия известного автора криминальных романов виновника торжества находят мёртвым. За расследование берётся харизматичный частный детектив Бенуа Блан.",
+                whyWatch: "Уютный герметичный детектив с блистательным актёрским составом и отличным юмором."
+            },
+            {
+                id: 13,
+                title: "Реальные упыри",
+                originalTitle: "What We Do in the Shadows",
+                year: 2014,
+                genre: "Комедия",
+                imdbRating: 7.6,
+                genreRank: 134, // Топ-200 жанра
+                mood: "Расслабиться",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "cozy",
+                duration: "86 мин",
+                director: "Тайка Вайтити, Джемейн Клемент",
+                icon: "fa-bat",
+                gradient: "bg-[#dccbc4]",
+                description: "История жизни Виаго, Дикона и Владислава — трёх соседей и по совместительству бессмертных вампиров, которые пытаются выжить в современном мире, где нужно платить аренду и мыть посуду.",
+                whyWatch: "Остроумное псевдодокументальное кино от Тайки Вайтити для лёгкого вечера в компании."
+            },
+
+            // === ТРИЛЛЕР ===
+            {
+                id: 14,
+                title: "Остров проклятых",
+                originalTitle: "Shutter Island",
+                year: 2010,
+                genre: "Триллер",
+                imdbRating: 8.2,
+                genreRank: 14, // Топ-50 жанра
+                mood: "Держит в напряжении",
+                pace: "balanced",
+                company: "couple",
+                atmosphere: "mystery",
+                duration: "138 мин",
+                director: "Мартин Скорсезе",
+                icon: "fa-lighthouse",
+                gradient: "bg-[#cfd3d6]",
+                description: "Два американских судебных пристава отправляются на уединённый остров в штате Массачусетс, чтобы расследовать таинственное исчезновение пациентки клиники для умалишённых преступников.",
+                whyWatch: "Густая мистическая атмосфера и один из лучших финальных твистов в современном кино."
+            },
+            {
+                id: 15,
+                title: "Паразиты",
+                originalTitle: "Gisaengchung",
+                year: 2019,
+                genre: "Триллер",
+                imdbRating: 8.5,
+                genreRank: 5, // Топ-50 жанра
+                mood: "Подумать",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "real",
+                duration: "132 мин",
+                director: "Пон Джун-хо",
+                icon: "fa-stairs",
+                gradient: "bg-[#d2d8d0]",
+                description: "Обычное корейское семейство Ким живёт в сыром полуподвале, пока сыну не выпадает шанс устроиться репетитором в роскошный особняк богатой семьи Пак. У Кима созревает хитроумный план...",
+                whyWatch: "Обладатель 4 «Оскаров», виртуозно сочетающий чёрную комедию, социальную драму и напряжённый триллер."
+            },
+            {
+                id: 16,
+                title: "Пленницы",
+                originalTitle: "Prisoners",
+                year: 2013,
+                genre: "Триллер",
+                imdbRating: 8.2,
+                genreRank: 58, // Топ-100 жанра
+                mood: "Держит в напряжении",
+                pace: "slow",
+                company: "solo",
+                atmosphere: "mystery",
+                duration: "153 мин",
+                director: "Дени Вильнёв",
+                icon: "fa-user-secret",
+                gradient: "bg-[#d8d3cb]",
+                description: "Когда полиция заходит в тупик в поисках двух пропавших девочек, убитый горем отец берёт правосудие в свои руки, в то время как детектив Локи продолжает методично распутывать клубок улик.",
+                whyWatch: "Эталонный мрачный детективный триллер с сильнейшими ролями Хью Джекмана и Джейка Джилленхола."
+            },
+            {
+                id: 17,
+                title: "Исчезнувшая",
+                originalTitle: "Gone Girl",
+                year: 2014,
+                genre: "Триллер",
+                imdbRating: 8.1,
+                genreRank: 75, // Топ-100 жанра
+                mood: "Держит в напряжении",
+                pace: "balanced",
+                company: "couple",
+                atmosphere: "mystery",
+                duration: "149 мин",
+                director: "Дэвид Финчер",
+                icon: "fa-book-skull",
+                gradient: "bg-[#cdd7d6]",
+                description: "Все было готово для празднования пятилетнего юбилея супружеской жизни, когда вдруг необъяснимо пропала жена главного героя. Остались следы борьбы в доме и цепочка загадочных подсказок.",
+                whyWatch: "Холодный, хирургически точный триллер Дэвида Финчера, от которого невозможно оторваться."
+            },
+            {
+                id: 18,
+                title: "Поиск",
+                originalTitle: "Searching",
+                year: 2018,
+                genre: "Триллер",
+                imdbRating: 7.6,
+                genreRank: 152, // Топ-200 жанра
+                mood: "Держит в напряжении",
+                pace: "dynamic",
+                company: "any",
+                atmosphere: "real",
+                duration: "102 мин",
+                director: "Аниш Чаганти",
+                icon: "fa-laptop",
+                gradient: "bg-[#d0d5d8]",
+                description: "16-летняя дочь Дэвида Кима бесследно исчезает. Чтобы помочь следствию, отец взламывает её ноутбук и понимает, что совсем ничего не знал о собственной дочери.",
+                whyWatch: "Необычный формат скринлайф-триллера, где всё действие разворачивается на экранах компьютеров и смартфонов."
+            },
+
+            // === КРИМИНАЛ ===
+            {
+                id: 19,
+                title: "Тёмный рыцарь",
+                originalTitle: "The Dark Knight",
+                year: 2008,
+                genre: "Криминал",
+                imdbRating: 9.0,
+                genreRank: 2, // Топ-50 жанра
+                mood: "Держит в напряжении",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "real",
+                duration: "152 мин",
+                director: "Кристофер Нолан",
+                icon: "fa-mask",
+                gradient: "bg-[#d4d0c9]",
+                description: "Бэтмен, лейтенант Джим Гордон и новый прокурор Харви Дент намерены очистить Готэм от преступности. Но им бросает вызов гениальный криминальный анархист по прозвищу Джокер.",
+                whyWatch: "Больше чем кинокомикс — грандиозная криминальная драма с легендарным Джокером Хита Леджера."
+            },
+            {
+                id: 20,
+                title: "Отступники",
+                originalTitle: "The Departed",
+                year: 2006,
+                genre: "Криминал",
+                imdbRating: 8.5,
+                genreRank: 12, // Топ-50 жанра
+                mood: "Держит в напряжении",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "real",
+                duration: "151 мин",
+                director: "Мартин Скорсезе",
+                icon: "fa-shield-halved",
+                gradient: "bg-[#e0d0c8]",
+                description: "Два лучших выпускника полицейской академии оказались по разные стороны баррикад: один из них — агент мафии в рядах полиции, другой — «крот», внедрённый в мафию.",
+                whyWatch: "Нервная игра в кошки-мышки между Леонардо ДиКаприо и Мэттом Дэймоном под режиссурой Скорсезе."
+            },
+            {
+                id: 21,
+                title: "Джентльмены",
+                originalTitle: "The Gentlemen",
+                year: 2019,
+                genre: "Криминал",
+                imdbRating: 7.8,
+                genreRank: 67, // Топ-100 жанра
+                mood: "Расслабиться",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "real",
+                duration: "113 мин",
+                director: "Гай Ричи",
+                icon: "fa-crown",
+                gradient: "bg-[#d9d4c2]",
+                description: "Талантливый выпускник Оксфорда придумал нелегальную схему обогащения с использованием поместий обедневшей английской аристократии. Когда он решает продать бизнес, начинается большая игра.",
+                whyWatch: "Стильные костюмы, искромётные диалоги и фирменный британский криминальный драйв Гая Ричи."
+            },
+            {
+                id: 22,
+                title: "Поймай меня, если сможешь",
+                originalTitle: "Catch Me If You Can",
+                year: 2002,
+                genre: "Криминал",
+                imdbRating: 8.1,
+                genreRank: 54, // Топ-100 жанра
+                mood: "Расслабиться",
+                pace: "dynamic",
+                company: "any",
+                atmosphere: "cozy",
+                duration: "141 мин",
+                director: "Стивен Спилберг",
+                icon: "fa-plane-departure",
+                gradient: "bg-[#d8d6c8]",
+                description: "Юный Фрэнк Абигнейл успел поработать пилотом, врачом и адвокатом, обналичив поддельные чеки на миллионы долларов. По его следам идёт упрямый агент ФБР Карл Хэнрэтти.",
+                whyWatch: "Лёгкое, обаятельное и захватывающее ретро-приключение от Стивена Спилберга."
+            },
+            {
+                id: 23,
+                title: "Малыш на драйве",
+                originalTitle: "Baby Driver",
+                year: 2017,
+                genre: "Криминал",
+                imdbRating: 7.5,
+                genreRank: 141, // Топ-200 жанра
+                mood: "Расслабиться",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "real",
+                duration: "113 мин",
+                director: "Эдгар Райт",
+                icon: "fa-headphones",
+                gradient: "bg-[#e5d3cd]",
+                description: "Молодой парень по прозвищу Малыш обожает стильную музыку и работает водителем на ограблениях. Но встретив девушку своей мечты, он решает выйти из криминальной игры.",
+                whyWatch: "Уникальный фильм, где каждая погоня и выстрел смонтированы строго в такт музыкальному ритму."
+            },
+
+            // === АНИМАЦИЯ ===
+            {
+                id: 24,
+                title: "Унесённые призраками",
+                originalTitle: "Sen to Chihiro no kamikakushi",
+                year: 2001,
+                genre: "Анимация",
+                imdbRating: 8.6,
+                genreRank: 1, // Топ-50 жанра
+                mood: "Вдохновиться",
+                pace: "balanced",
+                company: "family",
+                atmosphere: "cozy",
+                duration: "125 мин",
+                director: "Хаяо Миядзаки",
+                icon: "fa-dragon",
+                gradient: "bg-[#ddd4d6]",
+                description: "Десятилетняя Тихиро вместе с родителями попадает в таинственный мир духов и древних богов, где правит колдунья Юбаба. Теперь девочке нужно найти способ спасти родителей и вернуться домой.",
+                whyWatch: "Бессмертный шедевр студии Ghibli, наполненный волшебством и глубокой мудростью."
+            },
+            {
+                id: 25,
+                title: "Человек-паук: Через вселенные",
+                originalTitle: "Spider-Man: Into the Spider-Verse",
+                year: 2018,
+                genre: "Анимация",
+                imdbRating: 8.4,
+                genreRank: 6, // Топ-50 жанра
+                mood: "Вдохновиться",
+                pace: "dynamic",
+                company: "friends",
+                atmosphere: "future",
+                duration: "117 мин",
+                director: "Боб Персичетти, Питер Рэмзи",
+                icon: "fa-spider",
+                gradient: "bg-[#e2cfc8]",
+                description: "Подросток из Бруклина Майлз Моралес открывает безграничные возможности Мультивселенной, где носить маску супергероя может не только он один.",
+                whyWatch: "Революционная анимация, оживляющая страницы комикса, и невероятный драйв."
+            },
+            {
+                id: 26,
+                title: "Тайна Коко",
+                originalTitle: "Coco",
+                year: 2017,
+                genre: "Анимация",
+                imdbRating: 8.4,
+                genreRank: 9, // Топ-50 жанра
+                mood: "Вдохновиться",
+                pace: "balanced",
+                company: "family",
+                atmosphere: "cozy",
+                duration: "105 мин",
+                director: "Ли Анкрич",
+                icon: "fa-guitar",
+                gradient: "bg-[#e6d3c2]",
+                description: "12-летний Мигель из мексиканской деревушки мечтает стать музыкантом, несмотря на семейный запрет. В День мёртвых он отправляется в красочную Страну предков, чтобы раскрыть тайну своей семьи.",
+                whyWatch: "Один из самых душевных и красочных шедевров Pixar о семье, памяти и мечте."
+            },
+            {
+                id: 27,
+                title: "Рататуй",
+                originalTitle: "Ratatouille",
+                year: 2007,
+                genre: "Анимация",
+                imdbRating: 8.1,
+                genreRank: 55, // Топ-100 жанра
+                mood: "Расслабиться",
+                pace: "balanced",
+                company: "family",
+                atmosphere: "cozy",
+                duration: "111 мин",
+                director: "Брэд Бёрд",
+                icon: "fa-utensils",
+                gradient: "bg-[#e4d1c0]",
+                description: "Крыс Реми обладает уникальным обонянием и мечтает стать шеф-поваром в лучшем ресторане Парижа. Вместе с неуклюжим уборщиком Лингвини он устраивает настоящую кулинарную революцию.",
+                whyWatch: "Уютное парижское приключение о том, что настоящий талант может прийти откуда угодно."
+            },
+            {
+                id: 28,
+                title: "Клаус",
+                originalTitle: "Klaus",
+                year: 2019,
+                genre: "Анимация",
+                imdbRating: 8.2,
+                genreRank: 112, // Топ-200 жанра
+                mood: "Вдохновиться",
+                pace: "balanced",
+                company: "family",
+                atmosphere: "cozy",
+                duration: "96 мин",
+                director: "Серхио Паблос",
+                icon: "fa-gift",
+                gradient: "bg-[#d2d6d4]",
+                description: "Избалованного сына владельца почтовой империи отправляют на далёкий северный остров Смиренсбург, где жители веками враждуют друг с другом. Там он знакомится с угрюмым лесным плотником Клаусом.",
+                whyWatch: "Потрясающе красивая ручная 2D-анимация с объёмным светом и невероятно добрая история."
+            }
+        ];
+
+        // Доступные жанры и настроения
+        const GENRES = ["Все жанры", "Фантастика", "Драма", "Комедия", "Триллер", "Криминал", "Анимация"];
+        const MOODS = [
+            { label: "Любое", icon: "fa-sparkles" },
+            { label: "Подумать", icon: "fa-brain" },
+            { label: "Расслабиться", icon: "fa-couch" },
+            { label: "Держит в напряжении", icon: "fa-bolt" },
+            { label: "Вдохновиться", icon: "fa-fire-flame-curved" }
+        ];
+
+        // Вопросы для интерактивного теста
+        const QUIZ_QUESTIONS = [
+            {
+                question: "1. В какой компании вы планируете смотреть фильм сегодня?",
+                subtitle: "Мы подберём картину, которая создаст правильную атмосферу для всех",
+                key: "company",
+                options: [
+                    { value: "solo", title: "Наедине с собой", desc: "Хочу полное погружение и глубокое послевкусие", icon: "fa-headphones" },
+                    { value: "couple", title: "Вдвоём / Романтический вечер", desc: "Красивое кино с интригой или сильными эмоциями", icon: "fa-heart" },
+                    { value: "friends", title: "В компании друзей", desc: "Динамичный сюжет, юмор или крутые повороты", icon: "fa-user-group" },
+                    { value: "family", title: "Всей семьёй", desc: "Доброе, тёплое и вдохновляющее приключение", icon: "fa-house-chimney-window" }
+                ]
+            },
+            {
+                question: "2. Какое настроение вам сейчас ближе всего?",
+                subtitle: "Выберите главный эмоциональный запрос на этот вечер",
+                key: "mood",
+                options: [
+                    { value: "Расслабиться", title: "Отдохнуть и улыбнуться", desc: "Лёгкий слог, стиль и минимум тяжёлой драмы", icon: "fa-mug-hot" },
+                    { value: "Держит в напряжении", title: "Пощекотать нервы и разгадать тайну", desc: "Саспенс, неожиданные развязки и высокий пульс", icon: "fa-bolt-lightning" },
+                    { value: "Подумать", title: "Интеллектуальный вызов", desc: "Сложные идеи, философия и пища для размышлений", icon: "fa-lightbulb" },
+                    { value: "Вдохновиться", title: "Зарядиться верой в людей и мечту", desc: "Сильные герои и светлый финал", icon: "fa-sun" }
+                ]
+            },
+            {
+                question: "3. Какой темп повествования вы предпочитаете?",
+                subtitle: "От стремительного экшена до гипнотического погружения",
+                key: "pace",
+                options: [
+                    { value: "dynamic", title: "Стремительный и бодрый", desc: "События несутся с первых минут без пауз", icon: "fa-gauge-high" },
+                    { value: "balanced", title: "Сбалансированный", desc: "Идеальный баланс диалогов, эмоций и динамики", icon: "fa-scale-balanced" },
+                    { value: "slow", title: "Атмосферный и вдумчивый", desc: "Красивые кадры, глубина и постепенное напряжение", icon: "fa-hourglass-half" }
+                ]
+            },
+            {
+                question: "4. Из какой части рейтинга IMDb выбирать?",
+                subtitle: "Можно остановиться на безусловной классике или копнуть глубже в Топ-200",
+                key: "tier",
+                options: [
+                    { value: 50, title: "Только Топ-50 IMDb каждого жанра", desc: "Абсолютные шедевры мирового кинематографа", icon: "fa-trophy" },
+                    { value: 100, title: "Топ-100 IMDb каждого жанра", desc: "Золотой фонд и проверенные временем хиты", icon: "fa-medal" },
+                    { value: 200, title: "Весь Топ-200 IMDb (больше открытий)", desc: "Включая менее заезженные, но крутые картины", icon: "fa-compass" }
+                ]
+            }
+        ];
+
+        // Глобальное состояние приложения
+        let state = {
+            selectedGenre: "Все жанры",
+            imdbTier: 200, // 50, 100 или 200
+            selectedMood: "Любое",
+            watchlist: [],
+            quizStep: 0,
+            quizAnswers: {}
+        };
+
+        // Загрузка списка «Буду смотреть» из localStorage
+        function loadWatchlist() {
+            try {
+                const saved = localStorage.getItem('vibecinema_watchlist');
+                if (saved) {
+                    state.watchlist = JSON.parse(saved);
+                }
+            } catch (e) {
+                state.watchlist = [];
+            }
+            updateWatchlistUI();
+        }
+
+        function saveWatchlist() {
+            try {
+                localStorage.setItem('vibecinema_watchlist', JSON.stringify(state.watchlist));
+            } catch (e) {
+                console.warn('Не удалось сохранить в localStorage');
+            }
+            updateWatchlistUI();
+        }
+
+        // Инициализация фильтров на главном экране
+        function renderFilterControls() {
+            // 1. Кнопки жанров
+            const genreContainer = document.getElementById('genreFilterContainer');
+            genreContainer.innerHTML = GENRES.map(genre => {
+                const isActive = state.selectedGenre === genre;
+                return `
+                    <button onclick="setGenre('${genre}')" class="px-3.5 py-2 text-xs sm:text-sm font-medium transition border ${
+                        isActive 
+                        ? 'bg-ink text-cream border-ink' 
+                        : 'bg-paper text-ink border-line hover:border-mute hover:bg-dust'
+                    }">
+                        ${genre}
+                    </button>
+                `;
+            }).join('');
+
+            // 2. Кнопки Топ-50 / 100 / 200 IMDb
+            document.querySelectorAll('.tier-btn').forEach(btn => {
+                const tier = Number(btn.getAttribute('data-tier'));
+                if (tier === state.imdbTier) {
+                    btn.className = "tier-btn py-2.5 px-3 text-xs sm:text-sm font-semibold transition flex flex-col items-center justify-center gap-0.5 bg-ink text-cream";
+                } else {
+                    btn.className = "tier-btn py-2.5 px-3 text-xs sm:text-sm font-medium transition flex flex-col items-center justify-center gap-0.5 text-mute hover:text-ink hover:bg-dust";
+                }
+            });
+
+            // 3. Кнопки настроения
+            const moodContainer = document.getElementById('moodFilterContainer');
+            moodContainer.innerHTML = MOODS.map(m => {
+                const isActive = state.selectedMood === m.label;
+                return `
+                    <button onclick="setMood('${m.label}')" class="px-3.5 py-2 text-xs sm:text-sm font-medium transition flex items-center gap-2 border ${
+                        isActive 
+                        ? 'bg-ink text-cream border-ink' 
+                        : 'bg-paper text-ink border-line hover:border-mute hover:bg-dust'
+                    }">
+                        <i class="fa-solid ${m.icon} ${isActive ? 'text-cream' : 'text-mute'}"></i>
+                        <span>${m.label}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function setGenre(genre) {
+            state.selectedGenre = genre;
+            renderFilterControls();
+            applyFilters(false);
+        }
+
+        function setImdbTier(tier) {
+            state.imdbTier = tier;
+            renderFilterControls();
+            applyFilters(false);
+        }
+
+        function setMood(mood) {
+            state.selectedMood = mood;
+            renderFilterControls();
+            applyFilters(false);
+        }
+
+        function resetAllFilters() {
+            state.selectedGenre = "Все жанры";
+            state.imdbTier = 200;
+            state.selectedMood = "Любое";
+            document.getElementById('searchInput').value = "";
+            document.getElementById('sortSelect').value = "rank_asc";
+            renderFilterControls();
+            applyFilters(false);
+            showToast("Все фильтры сброшены", "fa-rotate-left");
+        }
+
+        function resetToHome() {
+            resetAllFilters();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Получение отфильтрованного списка фильмов
+        function getFilteredMovies() {
+            const searchQuery = (document.getElementById('searchInput')?.value || "").trim().toLowerCase();
+            const sortBy = document.getElementById('sortSelect')?.value || "rank_asc";
+
+            let filtered = MOVIES_DB.filter(movie => {
+                const matchGenre = state.selectedGenre === "Все жанры" || movie.genre === state.selectedGenre;
+                const matchTier = movie.genreRank <= state.imdbTier;
+                const matchMood = state.selectedMood === "Любое" || movie.mood === state.selectedMood;
+                const matchSearch = !searchQuery || 
+                    movie.title.toLowerCase().includes(searchQuery) ||
+                    movie.originalTitle.toLowerCase().includes(searchQuery) ||
+                    movie.director.toLowerCase().includes(searchQuery);
+
+                return matchGenre && matchTier && matchMood && matchSearch;
+            });
+
+            // Сортировка
+            filtered.sort((a, b) => {
+                if (sortBy === "rank_asc") return a.genreRank - b.genreRank;
+                if (sortBy === "rating_desc") return b.imdbRating - a.imdbRating;
+                if (sortBy === "year_desc") return b.year - a.year;
+                if (sortBy === "year_asc") return a.year - b.year;
+                return 0;
+            });
+
+            return filtered;
+        }
+
+        // Вспомогательная функция бейджа Топ-50 / 100 / 200
+        function getRankBadgeInfo(rank) {
+            if (rank <= 50) {
+                return {
+                    label: `Топ-50 • #${rank} в жанре`,
+                    classes: "bg-ochre/15 text-ink border-ochre/40"
+                };
+            } else if (rank <= 100) {
+                return {
+                    label: `Топ-100 • #${rank} в жанре`,
+                    classes: "bg-sage/15 text-ink border-sage/40"
+                };
+            } else {
+                return {
+                    label: `Топ-200 • #${rank} в жанре`,
+                    classes: "bg-paper text-mute border-line"
+                };
+            }
+        }
+
+        // Отрисовка сетки фильмов
+        function applyFilters(shouldScroll = false) {
+            const movies = getFilteredMovies();
+            const grid = document.getElementById('moviesGrid');
+            const emptyState = document.getElementById('emptyState');
+
+            // Обновляем счетчики и заголовки
+            document.getElementById('matchingCountPill').textContent = movies.length;
+            document.getElementById('activeTierBadge').textContent = `Топ-${state.imdbTier} IMDb жанра`;
+            document.getElementById('resultsTitle').textContent = state.selectedGenre === "Все жанры" 
+                ? "Подборка лучших фильмов" 
+                : `Жанр: ${state.selectedGenre}`;
+            
+            document.getElementById('resultsSubtitle').textContent = 
+                `Найдено фильмов: ${movies.length} • Настроение: ${state.selectedMood}`;
+
+            // Обновляем подсказку в модальном окне рандома
+            const randomSummary = document.getElementById('randomFilterSummary');
+            if (randomSummary) {
+                randomSummary.textContent = `${state.selectedGenre}, Топ-${state.imdbTier}, ${state.selectedMood}`;
+            }
+
+            if (movies.length === 0) {
+                grid.innerHTML = "";
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            grid.innerHTML = movies.map(movie => renderMovieCard(movie)).join('');
+
+            if (shouldScroll) {
+                document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        // HTML одной карточки фильма
+        function renderMovieCard(movie) {
+            const isSaved = state.watchlist.includes(movie.id);
+            const badge = getRankBadgeInfo(movie.genreRank);
+
+            return `
+                <article class="card-hover bg-cream border border-line overflow-hidden flex flex-col justify-between">
+                    <div>
+                        <div class="relative h-40 ${movie.gradient} p-4 flex flex-col justify-between overflow-hidden">
+                            <i class="fa-solid ${movie.icon} absolute -right-3 -bottom-3 text-7xl text-ink/10 pointer-events-none"></i>
+                            
+                            <div class="flex items-center justify-between gap-2 relative z-10">
+                                <span class="text-[11px] font-semibold px-2 py-1 border ${badge.classes}">
+                                    ${badge.label}
+                                </span>
+                                <span class="px-2 py-1 bg-cream/80 text-ink font-semibold text-xs flex items-center gap-1 border border-line">
+                                    <i class="fa-solid fa-star text-[10px] text-ochre"></i> ${movie.imdbRating.toFixed(1)}
+                                </span>
+                            </div>
+
+                            <div class="relative z-10">
+                                <span class="inline-block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/70 mb-1">
+                                    ${movie.genre} • ${movie.year}
+                                </span>
+                                <h3 class="text-lg font-semibold text-ink leading-snug line-clamp-1">${movie.title}</h3>
+                                <p class="text-xs text-ink/60 line-clamp-1">${movie.originalTitle} • ${movie.director}</p>
+                            </div>
+                        </div>
+
+                        <div class="p-4">
+                            <div class="flex flex-wrap items-center gap-1.5 mb-3">
+                                <span class="text-[11px] px-2 py-0.5 bg-paper text-mute border border-line">
+                                    ${movie.duration}
+                                </span>
+                                <span class="text-[11px] px-2 py-0.5 bg-paper text-mute border border-line">
+                                    ${movie.mood}
+                                </span>
+                            </div>
+                            <p class="text-xs sm:text-sm text-ink/80 leading-relaxed line-clamp-3 mb-3">
+                                ${movie.description}
+                            </p>
+                            <div class="p-2.5 bg-paper border border-line text-xs text-mute">
+                                <span class="text-ink font-semibold">Почему стоит смотреть:</span> ${movie.whyWatch}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="px-4 pb-4 pt-1 flex items-center gap-2">
+                        <button onclick="toggleWatchlistItem(${movie.id})" class="w-full py-2.5 px-3 font-semibold text-xs sm:text-sm transition flex items-center justify-center gap-2 ${
+                            isSaved 
+                            ? 'bg-sage/15 text-sage border border-sage/30 hover:bg-sage/20' 
+                            : 'bg-paper hover:bg-dust text-ink border border-line'
+                        }">
+                            <i class="fa-solid ${isSaved ? 'fa-check' : 'fa-bookmark'}"></i>
+                            <span>${isSaved ? 'В списке «Буду смотреть»' : 'Буду смотреть'}</span>
+                        </button>
+                    </div>
+                </article>
+            `;
+        }
+
+        // === ФУНКЦИОНАЛ 2: РАНДОМНОЕ КИНО (РУЛЕТКА) ===
+        function openRandomModal() {
+            const modal = document.getElementById('randomModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            spinRandomMovie();
+        }
+
+        function closeRandomModal() {
+            const modal = document.getElementById('randomModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function spinRandomMovie() {
+            const container = document.getElementById('randomCardContainer');
+            const useFilters = document.getElementById('useFiltersInRandom').checked;
+            
+            let pool = useFilters ? getFilteredMovies() : MOVIES_DB;
+            if (pool.length === 0) {
+                pool = MOVIES_DB; // Если фильтры слишком узкие, берем всю базу
+            }
+
+            // Эффект прокрутки рулетки
+            let ticks = 0;
+            const maxTicks = 8;
+            container.classList.add('roulette-spinning');
+
+            const interval = setInterval(() => {
+                const tempMovie = pool[Math.floor(Math.random() * pool.length)];
+                container.innerHTML = renderRandomSpotlightCard(tempMovie, true);
+                ticks++;
+
+                if (ticks >= maxTicks) {
+                    clearInterval(interval);
+                    container.classList.remove('roulette-spinning');
+                    const finalMovie = pool[Math.floor(Math.random() * pool.length)];
+                    container.innerHTML = renderRandomSpotlightCard(finalMovie, false);
+                }
+            }, 90);
+        }
+
+        function renderRandomSpotlightCard(movie, isSpinning) {
+            const badge = getRankBadgeInfo(movie.genreRank);
+            const isSaved = state.watchlist.includes(movie.id);
+
+            return `
+                <div class="border ${isSpinning ? 'border-line' : 'border-brick/40'} bg-paper overflow-hidden transition-all">
+                    <div class="p-5 ${movie.gradient} relative">
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <span class="text-xs font-semibold px-2 py-1 border ${badge.classes}">
+                                ${badge.label}
+                            </span>
+                            <span class="px-2 py-1 bg-cream/80 text-ink font-semibold text-sm flex items-center gap-1 border border-line">
+                                <i class="fa-solid fa-star text-ochre"></i> ${movie.imdbRating.toFixed(1)}
+                            </span>
+                        </div>
+                        <h4 class="text-xl sm:text-2xl font-semibold text-ink">${movie.title} (${movie.year})</h4>
+                        <p class="text-xs text-ink/60 mt-0.5">${movie.originalTitle} • Реж. ${movie.director} • ${movie.genre}</p>
+                    </div>
+                    <div class="p-5">
+                        <p class="text-sm text-ink leading-relaxed mb-3">${movie.description}</p>
+                        <div class="p-3 bg-cream border border-line text-xs text-mute mb-4">
+                            <strong class="text-ink">Вердикт рулетки:</strong> ${movie.whyWatch}
+                        </div>
+                        <button onclick="toggleWatchlistItem(${movie.id}); spinUpdateButton(${movie.id})" id="randomSaveBtn_${movie.id}" class="w-full py-2.5 px-4 font-semibold text-xs sm:text-sm transition flex items-center justify-center gap-2 ${
+                            isSaved 
+                            ? 'bg-sage/15 text-sage border border-sage/30' 
+                            : 'bg-ink hover:bg-brick text-cream'
+                        }">
+                            <i class="fa-solid ${isSaved ? 'fa-check' : 'fa-bookmark'}"></i>
+                            <span>${isSaved ? 'Уже в списке «Буду смотреть»' : 'Отложить в «Буду смотреть»'}</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function spinUpdateButton(movieId) {
+            const movie = MOVIES_DB.find(m => m.id === movieId);
+            if (movie) {
+                document.getElementById('randomCardContainer').innerHTML = renderRandomSpotlightCard(movie, false);
+            }
+        }
+
+        // === ФУНКЦИОНАЛ 3: ПОШАГОВЫЙ ТЕСТ ПО ПОДБОРУ ФИЛЬМА ===
+        function openQuizModal() {
+            state.quizStep = 0;
+            state.quizAnswers = {};
+            const modal = document.getElementById('quizModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.getElementById('quizProgressWrapper').classList.remove('hidden');
+            renderQuizStep();
+        }
+
+        function closeQuizModal() {
+            const modal = document.getElementById('quizModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function renderQuizStep() {
+            const stepIndex = state.quizStep;
+            const totalSteps = QUIZ_QUESTIONS.length;
+
+            if (stepIndex >= totalSteps) {
+                renderQuizResult();
+                return;
+            }
+
+            const q = QUIZ_QUESTIONS[stepIndex];
+            const percent = Math.round(((stepIndex + 1) / totalSteps) * 100);
+
+            document.getElementById('quizStepText').textContent = `Вопрос ${stepIndex + 1} из ${totalSteps}`;
+            document.getElementById('quizPercentText').textContent = `${percent}%`;
+            document.getElementById('quizProgressBar').style.width = `${percent}%`;
+
+            const container = document.getElementById('quizBodyContainer');
+            container.innerHTML = `
+                <div>
+                    <h4 class="text-lg sm:text-xl font-semibold text-ink mb-1">${q.question}</h4>
+                    <p class="text-xs sm:text-sm text-mute mb-5">${q.subtitle}</p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        ${q.options.map(opt => `
+                            <button onclick="selectQuizOption('${q.key}', '${opt.value}')" class="text-left p-4 bg-paper hover:bg-dust border border-line hover:border-mute transition group flex items-start gap-3.5">
+                                <div class="w-10 h-10 border border-line bg-cream text-mute group-hover:text-ink flex items-center justify-center shrink-0 transition">
+                                    <i class="fa-solid ${opt.icon}"></i>
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-sm text-ink">${opt.title}</div>
+                                    <div class="text-xs text-mute mt-0.5 leading-relaxed">${opt.desc}</div>
+                                </div>
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    ${stepIndex > 0 ? `
+                        <div class="mt-5 pt-4 border-t border-line flex justify-between">
+                            <button onclick="prevQuizStep()" class="text-xs text-mute hover:text-ink flex items-center gap-1.5">
+                                <i class="fa-solid fa-arrow-left"></i> Назад к предыдущему вопросу
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function selectQuizOption(key, value) {
+            state.quizAnswers[key] = key === 'tier' ? Number(value) : value;
+            state.quizStep++;
+            renderQuizStep();
+        }
+
+        function prevQuizStep() {
+            if (state.quizStep > 0) {
+                state.quizStep--;
+                renderQuizStep();
+            }
+        }
+
+        // Расчёт идеального фильма по ответам теста
+        function renderQuizResult() {
+            document.getElementById('quizProgressWrapper').classList.add('hidden');
+            const ans = state.quizAnswers;
+
+            // Оцениваем каждый фильм по баллам совпадения
+            const scoredMovies = MOVIES_DB.map(movie => {
+                let score = 0;
+                const reasons = [];
+
+                if (movie.genreRank <= (ans.tier || 200)) {
+                    score += 3;
+                    reasons.push(`Входит в выбранный Топ-${ans.tier} IMDb жанра (#${movie.genreRank})`);
+                }
+                if (movie.mood === ans.mood) {
+                    score += 4;
+                    reasons.push(`Настроение «${movie.mood}» точно под ваш запрос`);
+                }
+                if (movie.company === ans.company || movie.company === "any") {
+                    score += 3;
+                    reasons.push("Отлично подходит для выбранной компании");
+                }
+                if (movie.pace === ans.pace) {
+                    score += 2;
+                    reasons.push("Совпадает с желаемым темпом сюжета");
+                }
+
+                return { movie, score, reasons };
+            }).sort((a, b) => b.score - a.score || b.movie.imdbRating - a.movie.imdbRating);
+
+            const best = scoredMovies[0];
+            const alternatives = scoredMovies.slice(1, 3);
+            const badge = getRankBadgeInfo(best.movie.genreRank);
+
+            const container = document.getElementById('quizBodyContainer');
+            container.innerHTML = `
+                <div>
+                    <div class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-sage mb-3">
+                        <i class="fa-solid fa-check"></i> Подборка по вашим ответам
+                    </div>
+
+                    <div class="border border-line bg-paper overflow-hidden mb-5">
+                        <div class="p-5 ${best.movie.gradient}">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <span class="text-xs font-semibold px-2 py-1 border ${badge.classes}">
+                                    ${badge.label}
+                                </span>
+                                <span class="px-2 py-1 bg-cream/80 text-ink font-semibold text-sm border border-line">
+                                    <i class="fa-solid fa-star text-ochre"></i> ${best.movie.imdbRating.toFixed(1)}
+                                </span>
+                            </div>
+                            <h4 class="text-2xl font-semibold text-ink">${best.movie.title} (${best.movie.year})</h4>
+                            <p class="text-xs text-ink/60">${best.movie.originalTitle} • ${best.movie.genre} • ${best.movie.duration}</p>
+                        </div>
+                        <div class="p-5">
+                            <p class="text-sm text-ink mb-3">${best.movie.description}</p>
+                            <div class="p-3 bg-cream border border-line text-xs text-mute mb-4">
+                                <div class="font-semibold text-ink mb-1">Почему этот фильм:</div>
+                                <ul class="list-disc list-inside space-y-0.5">
+                                    ${best.reasons.map(r => `<li>${r}</li>`).join('')}
+                                </ul>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="toggleWatchlistItem(${best.movie.id})" class="flex-1 py-2.5 px-4 bg-ink hover:bg-brick text-cream font-semibold text-xs sm:text-sm transition">
+                                    <i class="fa-solid fa-bookmark mr-1.5"></i> Сохранить в «Буду смотреть»
+                                </button>
+                                <button onclick="openQuizModal()" class="py-2.5 px-4 bg-paper hover:bg-dust text-mute font-semibold text-xs sm:text-sm border border-line transition">
+                                    Пройти заново
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-mute mb-2.5">Также подойдут:</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            ${alternatives.map(item => `
+                                <div class="p-3 bg-paper border border-line flex items-center justify-between gap-2">
+                                    <div>
+                                        <div class="font-semibold text-sm text-ink">${item.movie.title} (${item.movie.year})</div>
+                                        <div class="text-xs text-mute">${item.movie.genre} • IMDb ${item.movie.imdbRating} • #${item.movie.genreRank}</div>
+                                    </div>
+                                    <button onclick="toggleWatchlistItem(${item.movie.id})" class="px-2.5 py-1.5 bg-cream hover:bg-dust text-mute text-xs transition shrink-0 border border-line">
+                                        <i class="fa-solid fa-bookmark"></i>
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // === СПИСОК «БУДУ СМОТРЕТЬ» (WATCHLIST) ===
+        function toggleWatchlistItem(movieId) {
+            const idx = state.watchlist.indexOf(movieId);
+            const movie = MOVIES_DB.find(m => m.id === movieId);
+
+            if (idx === -1) {
+                state.watchlist.push(movieId);
+                showToast(`«${movie.title}» добавлен в список «Буду смотреть»`, "fa-bookmark");
+            } else {
+                state.watchlist.splice(idx, 1);
+                showToast(`«${movie.title}» удалён из списка`, "fa-trash-can");
+            }
+
+            saveWatchlist();
+            applyFilters(false);
+        }
+
+        function clearWatchlist() {
+            state.watchlist = [];
+            saveWatchlist();
+            applyFilters(false);
+            showToast("Список «Буду смотреть» очищен", "fa-trash-can");
+        }
+
+        function toggleWatchlistDrawer() {
+            const drawer = document.getElementById('watchlistDrawer');
+            drawer.classList.toggle('hidden');
+            updateWatchlistUI();
+        }
+
+        function updateWatchlistUI() {
+            document.getElementById('watchlistCountBadge').textContent = state.watchlist.length;
+            const container = document.getElementById('watchlistItemsContainer');
+            if (!container) return;
+
+            if (state.watchlist.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-mute">
+                        <i class="fa-regular fa-bookmark text-3xl mb-2 block"></i>
+                        <p class="text-sm font-medium text-ink">Список на вечер пока пуст</p>
+                        <p class="text-xs mt-1">Нажимайте «Буду смотреть» на карточках, чтобы сохранить фильмы сюда.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const savedMovies = MOVIES_DB.filter(m => state.watchlist.includes(m.id));
+            container.innerHTML = savedMovies.map(m => `
+                <div class="p-3.5 bg-paper border border-line flex items-center justify-between gap-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-semibold text-ink"><i class="fa-solid fa-star text-ochre"></i> ${m.imdbRating}</span>
+                            <span class="text-[11px] text-mute">${m.genre} • #${m.genreRank} в жанре</span>
+                        </div>
+                        <h4 class="font-semibold text-sm text-ink mt-0.5">${m.title} (${m.year})</h4>
+                        <p class="text-xs text-mute">${m.duration} • ${m.mood}</p>
+                    </div>
+                    <button onclick="toggleWatchlistItem(${m.id})" class="w-8 h-8 border border-line bg-cream hover:bg-dust text-mute hover:text-brick flex items-center justify-center transition shrink-0" title="Удалить">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Всплывающее уведомление (Toast)
+        let toastTimer = null;
+        function showToast(message, iconClass = "fa-circle-check") {
+            const toast = document.getElementById('toastNotification');
+            const icon = document.getElementById('toastIcon');
+            const msg = document.getElementById('toastMessage');
+
+            msg.textContent = message;
+            icon.className = `fa-solid ${iconClass} text-brick`;
+
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 2600);
+        }
+
+        // Старт приложения при загрузке окна
+        window.onload = function () {
+            loadWatchlist();
+            renderFilterControls();
+            applyFilters(false);
+        };
+    </script>
+</body>
+</html>
